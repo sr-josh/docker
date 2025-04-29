@@ -182,9 +182,7 @@ winpty docker run -it \
 
 localhost:8080으로 접속해서 위 이메일, 비밀번호를 입력한다.
 
-register server의 host name에 network연결시 지정한 이름을 넣어줘야 한다
-
-![image.png](attachment:0b3edd76-0c66-417f-aded-149d679c43c2:image.png)
+register server > host name에 network연결시 지정한 이름을 넣어줘야 한다
 
 postgres와 pdadmin 컨테이너를 네트워크로 연결해준다
 
