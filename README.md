@@ -206,3 +206,152 @@ docker rm pg-database    # 컨테이너 삭제
 # 네트워크 설정이 dpage/pgadmin4 이전에 있어야 한다
 ```
 
+
+
+# Ingesting some data to postgres
+
+```bash
+jupyter nbconvert --to=script upload-data.ipynb #ipynb 파일을 스크립트로 변환
+```
+
+ingest_data.py
+
+```python
+#!/usr/bin/env python
+# coding: utf-8
+
+import os
+import argparse
+from time import time
+import pandas as pd
+from sqlalchemy import create_engine
+# pd.__version__
+
+def main(params):
+    user = params.user
+    password = params.password
+    host = params.host
+    port = params.port
+    db = params.db
+    table_name = params.table_name
+    url = params.url
+    csv_name = 'yellow.csv'
+
+    os.system(f"wget {url} -O {csv_name}") #안 되면 curl -O {url}
+    engine = create_engine(f'postgresql://{user}:{password}@{host}:{port}/{db}')
+    df_iter = pd.read_csv(csv_name, iterator=True, chunksize=100000)
+    df = next(df_iter)
+    df.tpep_pickup_datetime = pd.to_datetime(df.tpep_pickup_datetime)
+    df.tpep_dropoff_datetime = pd.to_datetime(df.tpep_dropoff_datetime)
+
+    df.head(n=0).to_sql(name=table_name, con=engine, if_exists='replace')
+    df.to_sql(name=table_name, con=engine, if_exists='append') 
+
+    while True:
+        try:
+            t_start = time()
+            df = next(df_iter)
+            df.tpep_pickup_datetime = pd.to_datetime(df.tpep_pickup_datetime)
+            df.tpep_dropoff_datetime = pd.to_datetime(df.tpep_dropoff_datetime)
+            df.to_sql(name=table_name, con=engine, if_exists='append') 
+            t_end = time()
+            print('insert... %.3f' % (t_end - t_start))
+        except StopIteration:
+            print("completed")
+            break
+
+# 직접 스크립트 실행시에만 __name__ == '__main__'이 되고
+# module로 import하면 import ingest_data -> __name__ == 'ingest_data'
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Ingest CSV data to Postges')
+    parser.add_argument('--user', help='user name for postgres')
+    parser.add_argument('--password', help='password name for postgres')
+    parser.add_argument('--host', help='host for postgres')
+    parser.add_argument('--port', help='port for postgres')
+    parser.add_argument('--db', help='db for postgres')
+    parser.add_argument('--table_name', help='table name for postgres')
+    parser.add_argument('--url', help='url for postgres')
+
+    args = parser.parse_args()
+    main(args)
+
+```
+
+## 1. 직접 실행
+
+postgresql을 실행한 뒤
+
+bash
+
+```bash
+python ingest_data.py \
+    --user=root \
+    --password=root \
+    --host=localhost \
+    --port=5432 \
+    --db=ny_taxi \
+    --table_name=yellow_taxi_trips \
+    --url="http://localhost/yellow.csv" #로컬에서 다운로드
+```
+
+
+## 2. Dockerizing
+
+
+Dockerfile
+
+```docker
+FROM python:3.9.1
+
+# for download
+RUN apt-get install wget
+# postgres db adapter for python, sqlalchemy needs it
+RUN pip install pandas sqlalchemy psycopg2
+
+WORKDIR /app
+COPY ingest_data.py ingest_data.py 
+
+ENTRYPOINT [ "python", "ingest_data.py" ]
+```
+
+```yaml
+docker build -t taxi_ingest:v001 .
+
+docker run -it \
+    --network=pg-network \
+    taxi_ingest:v001 \
+    --user=root \
+    --password=root \
+    --host=pg-database \
+    --port=5432 \
+    --db=ny_taxi \
+    --table_name=yellow_taxi_trips \
+    --url="http://localhost/yellow.csv"
+```
+
+
+## 3. docker-compose.yaml 다수의 컨테이너를 구동
+
+```yaml
+
+services:
+  pgdatabase:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+      - POSTGRES_DB=ny_taxi
+    volumes:
+      - "./ny_taxi_postgres_data:/var/lib/postgresql/data:rw"
+    ports:
+      - "5432:5432"
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=root
+    volumes:
+      - "./data_pgadmin:/var/lib/pgadmin"
+    ports:
+      - "8080:80"
+```
