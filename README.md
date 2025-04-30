@@ -326,8 +326,26 @@ docker run -it \
     --port=5432 \
     --db=ny_taxi \
     --table_name=yellow_taxi_trips \
-    --url="http://localhost/yellow.csv"
+    --url="http://host.docker.internal/yellow.csv" #도커에서 로컬에 접속할 수 있도록
 ```
+
+```bash
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.9/site-packages/sqlalchemy/engine/base.py", line
+2115, in _exec_insertmany_context
+    dialect.do_execute(
+  File "/usr/local/lib/python3.9/site-packages/sqlalchemy/engine/default.py", li
+ne 945, in do_execute
+    cursor.execute(statement, parameters)
+psycopg2.errors.InvalidTextRepresentation: invalid input syntax for type bigint:
+ "\N"
+LINE 1: ...04'::timestamp, '2025-01-17T18:19:55'::timestamp, '\N', 0.0,...
+                                                               ^
+데이터 중 \N 를 postresql에 insert할 때 오류가 나고 있는 듯
+
+```
+
 
 
 ## 3. docker-compose.yaml 다수의 컨테이너를 구동
@@ -355,3 +373,5 @@ services:
     ports:
       - "8080:80"
 ```
+
+

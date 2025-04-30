@@ -9,7 +9,7 @@ RUN pip install pandas sqlalchemy psycopg2
 WORKDIR /app
 
 # copy the script to the cont
-COPY ingest_daya.py ingest_data.py
+COPY /jupyter/ingest_data.py ingest_data.py
 
 # what to do first
 ENTRYPOINT ["python", "ingest_data.py"]
